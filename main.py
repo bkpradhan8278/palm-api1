@@ -14,7 +14,7 @@ mp_hands = mp.solutions.hands
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")  # Fallback for local/dev
 
 class PalmRequest(BaseModel):
-    image: str  # base64-encoded palm image
+    image_base64: str  # <-- Match your frontend
 
 def extract_hand_landmarks(base64_img):
     image_data = base64.b64decode(base64_img)
@@ -52,11 +52,11 @@ Based on the palm image and the detected hand geometry, provide a detailed palmi
 
 @app.post("/predict_palm")
 async def predict_palm(request: PalmRequest):
-    landmarks = extract_hand_landmarks(request.image)
+    landmarks = extract_hand_landmarks(request.image_base64)
     if not landmarks:
         return {"prediction": "No hand detected. Please upload a clear palm image."}
     try:
-        report = generate_gpt4o_report(request.image, landmarks, OPENAI_API_KEY)
+        report = generate_gpt4o_report(request.image_base64, landmarks, OPENAI_API_KEY)
         return {"prediction": report}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
