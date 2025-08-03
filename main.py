@@ -11,10 +11,10 @@ import os
 app = FastAPI()
 mp_hands = mp.solutions.hands
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")  # Fallback for local/dev
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")  # Set your real API key or use environment variable
 
 class PalmRequest(BaseModel):
-    image_base64: str  # <-- Match your frontend
+    image_base64: str  # Match your frontend POST key
 
 def extract_hand_landmarks(base64_img):
     image_data = base64.b64decode(base64_img)
@@ -52,6 +52,7 @@ Based on the palm image and the detected hand geometry, provide a detailed palmi
 
 @app.post("/predict_palm")
 async def predict_palm(request: PalmRequest):
+    print("Incoming request keys:", request.dict().keys())  # DEBUG: Shows exactly what key was received
     landmarks = extract_hand_landmarks(request.image_base64)
     if not landmarks:
         return {"prediction": "No hand detected. Please upload a clear palm image."}
