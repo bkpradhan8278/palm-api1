@@ -14,7 +14,7 @@ mp_hands = mp.solutions.hands
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")  # Set your real API key or use environment variable
 
 class PalmRequest(BaseModel):
-    image_base64: str  # Match your frontend POST key
+    image_base64: str  # Must match the key sent from Flutter
 
 def extract_hand_landmarks(base64_img):
     image_data = base64.b64decode(base64_img)
