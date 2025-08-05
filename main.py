@@ -11,8 +11,8 @@ app = FastAPI()
 # --- OpenAI API key (env var for security) ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Set in Render dashboard!
 
-# --- Firebase Admin setup (serviceAccountKey.json path via env var or auto) ---
-FIREBASE_CRED_PATH = os.getenv("FIREBASE_CRED_PATH", "serviceAccountKey.json")
+# --- Firebase Admin setup (serviceAccount is your secret file path on Render) ---
+FIREBASE_CRED_PATH = "/etc/secrets/serviceAccount"
 if not firebase_admin._apps:
     cred = credentials.Certificate(FIREBASE_CRED_PATH)
     firebase_admin.initialize_app(cred)
