@@ -24,14 +24,15 @@ class PalmRequest(BaseModel):
     user_id: str = None    # Optional, for user-specific records
 
 def generate_gpt4o_report(base64_img, openai_api_key):
-    openai.api_key = openai_api_key
+    # NEW: use the latest OpenAI Python SDK syntax (v1.x+)
+    client = openai.OpenAI(api_key=openai_api_key)
     prompt = (
         "You are a world-class palmistry expert. "
         "Analyze the attached palm image and provide a detailed palmistry reading, "
         "including personality, health, career, relationships, and unique features."
     )
     try:
-        completion = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a palmistry expert AI."},
@@ -45,7 +46,7 @@ def generate_gpt4o_report(base64_img, openai_api_key):
             ],
             max_tokens=900
         )
-        return completion['choices'][0]['message']['content']
+        return response.choices[0].message.content
     except Exception as e:
         return f"OpenAI API Error: {e}"
 
