@@ -40,7 +40,7 @@ def generate_gpt4o_report(base64_img, openai_api_key):
                     "role": "user",
                     "content": [
                         {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": f"data:image/png;base64,{base64_img}"}
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_img}"}}
                     ]
                 }
             ],
@@ -67,3 +67,4 @@ async def predict_palm(request: PalmRequest):
     db.collection("palm_readings").add(palm_doc)
     # 3. Return response
     return {"prediction": report}
+
