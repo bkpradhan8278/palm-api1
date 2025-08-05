@@ -9,12 +9,13 @@ from datetime import datetime
 app = FastAPI()
 
 # --- OpenAI API key (env var for security) ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Set in Render dashboard!
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Set this in Render dashboard!
 
-# --- Firebase Admin setup (serviceAccount is your secret file path on Render) ---
-FIREBASE_CRED_PATH = "/etc/secrets/serviceAccount"
+# --- Firebase Admin setup (service account JSON file path) ---
+# Use the Secret File path you set in Render
+FIREBASE_SECRET_PATH = "/etc/secrets/serviceAccount"
 if not firebase_admin._apps:
-    cred = credentials.Certificate(FIREBASE_CRED_PATH)
+    cred = credentials.Certificate(FIREBASE_SECRET_PATH)
     firebase_admin.initialize_app(cred)
 db = firestore.client()
 
