@@ -1,63 +1,67 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import base64
-from io import BytesIO
-from PIL import Image
-import numpy as np
-import mediapipe as mp
 import openai
 import os
+import firebase_admin
+from firebase_admin import credentials, firestore
+from datetime import datetime
 
 app = FastAPI()
-mp_hands = mp.solutions.hands
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")  # Set your real API key or use environment variable
+# --- OpenAI API key (env var for security) ---
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Set in Render dashboard!
+
+# --- Firebase Admin setup (serviceAccountKey.json path via env var or auto) ---
+FIREBASE_CRED_PATH = os.getenv("FIREBASE_CRED_PATH", "serviceAccountKey.json")
+if not firebase_admin._apps:
+    cred = credentials.Certificate(FIREBASE_CRED_PATH)
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
 
 class PalmRequest(BaseModel):
-    image_base64: str  # Must match the key sent from Flutter
+    image_base64: str      # Palm image (base64 string)
+    user_id: str = None    # Optional, for user-specific records
 
-def extract_hand_landmarks(base64_img):
-    image_data = base64.b64decode(base64_img)
-    img = Image.open(BytesIO(image_data)).convert("RGB")
-    img_np = np.array(img)
-    with mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5) as hands:
-        results = hands.process(img_np)
-        if not results.multi_hand_landmarks:
-            return None
-        hand_landmarks = results.multi_hand_landmarks[0]
-        coords = [{"x": lm.x, "y": lm.y, "z": lm.z} for lm in hand_landmarks.landmark]
-        return coords
-
-def generate_gpt4o_report(base64_img, landmarks, openai_api_key):
+def generate_gpt4o_report(base64_img, openai_api_key):
     openai.api_key = openai_api_key
-    prompt = f"""You are a world-class palmistry expert.
-Analyze the following hand:
-- Landmark coordinates: {landmarks}
-Based on the palm image and the detected hand geometry, provide a detailed palmistry reading including personality, health, career, relationships, and unique features."""
-    completion = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a palmistry expert AI."},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": f"data:image/png;base64,{base64_img}"}
-                ]
-            }
-        ],
-        max_tokens=900
+    prompt = (
+        "You are a world-class palmistry expert. "
+        "Analyze the attached palm image and provide a detailed palmistry reading, "
+        "including personality, health, career, relationships, and unique features."
     )
-    return completion['choices'][0]['message']['content']
+    try:
+        completion = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a palmistry expert AI."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": f"data:image/png;base64,{base64_img}"}
+                    ]
+                }
+            ],
+            max_tokens=900
+        )
+        return completion['choices'][0]['message']['content']
+    except Exception as e:
+        return f"OpenAI API Error: {e}"
 
 @app.post("/predict_palm")
 async def predict_palm(request: PalmRequest):
-    print("Incoming request keys:", request.dict().keys())  # DEBUG: Shows exactly what key was received
-    landmarks = extract_hand_landmarks(request.image_base64)
-    if not landmarks:
-        return {"prediction": "No hand detected. Please upload a clear palm image."}
-    try:
-        report = generate_gpt4o_report(request.image_base64, landmarks, OPENAI_API_KEY)
-        return {"prediction": report}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    print("Incoming request keys:", request.dict().keys())
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OpenAI API Key not set.")
+    # 1. Get GPT-4o prediction
+    report = generate_gpt4o_report(request.image_base64, OPENAI_API_KEY)
+    # 2. Save to Firestore
+    palm_doc = {
+        "user_id": request.user_id or "anonymous",
+        "image_base64": request.image_base64[:30] + "...",  # Don't store full image to save space!
+        "prediction": report,
+        "timestamp": datetime.utcnow(),
+    }
+    db.collection("palm_readings").add(palm_doc)
+    # 3. Return response
+    return {"prediction": report}
