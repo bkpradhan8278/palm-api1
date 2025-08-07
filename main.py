@@ -65,12 +65,12 @@ async def predict_palm(request: PalmRequest):
 
 # ------------ Kundali Feature Below ------------
 
-def generate_gpt4o_kundali(prompt_txt, openai_api_key):
+def generate_gpt4o_kundali_text(prompt_txt, openai_api_key):
     client = openai.OpenAI(api_key=openai_api_key)
     prompt = (
         "You are a Vedic astrologer and kundali analysis expert. "
-        "Analyze the following details or PDF image and give a detailed Vedic astrology report, including personality, career, marriage, wealth, health, and predictions.\n"
-        "Details/PDF: " + prompt_txt
+        "Analyze the following birth details and give a detailed Vedic astrology report, including personality, career, marriage, wealth, health, and predictions.\n"
+        "Details: " + prompt_txt
     )
     try:
         response = client.chat.completions.create(
@@ -85,6 +85,31 @@ def generate_gpt4o_kundali(prompt_txt, openai_api_key):
     except Exception as e:
         return f"OpenAI API Error: {e}"
 
+def generate_gpt4o_kundali_image(b64_img, openai_api_key):
+    client = openai.OpenAI(api_key=openai_api_key)
+    prompt = (
+        "You are a Vedic astrology and Kundali analysis expert. "
+        "Analyze the attached Kundali image and provide a detailed astrology report including career, marriage, health, and future predictions."
+    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a Vedic astrologer and Kundali expert AI."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_img}"}}
+                    ]
+                }
+            ],
+            max_tokens=900
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Kundali analysis failed: {e}"
+
 @app.post("/predict_kundli")
 async def predict_kundli(
     name: str = Form(None),
@@ -98,23 +123,14 @@ async def predict_kundli(
         raise HTTPException(status_code=500, detail="OpenAI API Key not set.")
 
     if file is not None:
-        # Handle PDF or Image
         file_content = await file.read()
-        try:
-            # If image, encode as base64 for GPT
-            if file.content_type.startswith("image/"):
-                b64_img = base64.b64encode(file_content).decode()
-                prompt_txt = f"User: {name}\nUploaded Kundali image below."
-                # You can modify to send as image_url in OpenAI if using vision model
-                # For now, we just describe it.
-                result = generate_gpt4o_kundali(prompt_txt, OPENAI_API_KEY)
-            elif file.content_type == "application/pdf":
-                prompt_txt = f"User: {name}\nUploaded Kundali PDF. (Cannot process PDF image directly here, but mention file upload.)"
-                result = generate_gpt4o_kundali(prompt_txt, OPENAI_API_KEY)
-            else:
-                raise HTTPException(status_code=400, detail="Only PDF or Image supported.")
-        except Exception as e:
-            result = f"Kundali analysis failed: {e}"
+        if file.content_type.startswith("image/"):
+            b64_img = base64.b64encode(file_content).decode()
+            result = generate_gpt4o_kundali_image(b64_img, OPENAI_API_KEY)
+        elif file.content_type == "application/pdf":
+            result = "PDF upload is not supported. Please upload an image of your kundali."
+        else:
+            raise HTTPException(status_code=400, detail="Only PDF or Image supported.")
 
         # Save to Firestore
         kundali_doc = {
@@ -129,9 +145,8 @@ async def predict_kundli(
         return {"analysis": result}
 
     elif name and dob and tob and place:
-        # Handle birth details
         prompt_txt = f"Name: {name}\nDOB: {dob}\nTOB: {tob}\nPlace: {place}"
-        result = generate_gpt4o_kundali(prompt_txt, OPENAI_API_KEY)
+        result = generate_gpt4o_kundali_text(prompt_txt, OPENAI_API_KEY)
         kundali_doc = {
             "user_id": user_id or "anonymous",
             "name": name,
